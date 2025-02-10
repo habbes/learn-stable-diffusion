@@ -8,6 +8,15 @@ class VAE_Encoder(nn.Sequential):
 
     def __init__(self):
         super().__init__(
+            # You may wonder, why this specific architecture? In a lot of DL research,
+            # it is common to borrow from prior work, models and architecture that worked
+            # well in a similar domain. So a lot of this architecture could be explained
+            # by prior art. The sequence of layers reduces the image size while
+            # increasing the number of features.
+            # In a variational autoencoder we not just compressing the image, but we
+            # are learning a latent space that represents the parameters of a (multivariate) (gaussian) distribution,
+            # the mean and variance of this distribution. (todo: Need to learn more about VAE)
+
             # Each image in the batch is a height * width * channels tensor
             # 3 channels for 3 color values per pixel.
             # The convolution layer will output 128 channels, these are features we want to learn from the image.
@@ -83,3 +92,42 @@ class VAE_Encoder(nn.Sequential):
             # Q: what's the value of kernel size 1? What operation does it perform?
             nn.Conv2d(8, 8, kernel_size=1, padding=0),
         )
+    
+    def forward(self, x: torch.Tensor, noise: torch.Tensor) -> torch.Tensor:
+        # x: (batch_size, channels:3, height:512, width:512):
+        # noise: (batch_size, out_channels, height / 8, width / 8): same as the the output tensor
+
+        for module in self:
+            if getattr(module, 'stride', None) == (2, 2):
+                # for each layer with a stride=2, we want to apply a custom assymetric padding
+                # i.e. adding a layer of pixes to the right and bottom sides only. If we used the 
+                # padding parameter un Conv2d, it would apply the padding to each side, and that's not
+                # what we want in this case.
+                x = F.pad(x, (0, 1, 0, 1))
+            
+            x = module(x)
+        
+        # (batch_size, 8, height / 8, width / 8) -> two tensors of shape (batch_size, 4, width / 8, height / 8)
+        mean, log_variance = torch.chunk(x, 2, dim=1)
+
+        # (batch_size, 4, height / 8, width / 8) -> (batch_size, 4, height / 8, width / 8)
+        log_variance = torch.clamp(log_variance, -30, 20)
+
+        # (batch_size, 4, height / 8, width / 8)
+        variance = log_variance.exp();
+
+        # (batch_size, 4, height / 8, width / 8)
+        stdev = variance.sqrt()
+
+        # Now that we have mean and variance of the latent space distribution
+        # we want to "sample" from this distribution.
+        # If we have a normal distribution with mean=0 and variance=1, Z=N(0, 1) we can sample
+        # by transforming to a distribution X = N(mean + variance)
+        # by X = mean + stdev * Z
+        x = mean + stdev * noise # we accept the noise as a parameter to allow the caller to initialize with a specific seed
+
+        # Scale the output by a constant
+        # (not sure why this is here, the instructor didn't know either but found it in the original repo, should look it up later)
+        x *= 0.18215
+
+        return x
