@@ -14,3 +14,5 @@ Other resources:
 - [Generative Adversarial Nets](https://arxiv.org/pdf/1406.2661)
 - [An Introduction to Variational Autoencoders](https://arxiv.org/pdf/1906.02691)
 - [Diffusion from scratch](https://github.com/Animadversio/DiffusionFromScratch)
+
+Continue from [Coding CLIP](https://youtu.be/ZBKpAp_6TGI?feature=shared&t=6892)
